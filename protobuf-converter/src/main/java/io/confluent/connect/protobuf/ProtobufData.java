@@ -1375,8 +1375,9 @@ public class ProtobufData {
       ctx.put(descriptor.getFullName(), builder);
       String name = enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName();
       builder.name(name);
-      List<OneofDescriptor> oneOfDescriptors = descriptor.getRealOneofs();
-      for (OneofDescriptor oneOfDescriptor : oneOfDescriptors) {
+      int numRealOneOfs = descriptor.getRealOneofCount();
+      for (int i = 0; i < numRealOneOfs; i++) {
+        OneofDescriptor oneOfDescriptor = descriptor.getOneof(i);
         if (flattenUnions) {
           List<FieldDescriptor> fieldDescriptors = oneOfDescriptor.getFields();
           for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
@@ -1387,8 +1388,9 @@ public class ProtobufData {
           builder.field(unionFieldName, toConnectSchema(ctx, oneOfDescriptor));
         }
       }
-      List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
-      for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
+      int numFields = descriptor.getFieldCount();
+      for (int i = 0; i < numFields; i++) {
+        FieldDescriptor fieldDescriptor = descriptor.getField(i);
         OneofDescriptor oneOfDescriptor = fieldDescriptor.getRealContainingOneof();
         if (oneOfDescriptor != null) {
           // Already added field as oneof
