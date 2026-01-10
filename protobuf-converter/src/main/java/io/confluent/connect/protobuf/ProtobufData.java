@@ -1230,13 +1230,15 @@ public class ProtobufData {
           final Struct struct = new Struct(schema.schema());
           final Descriptor descriptor = message.getDescriptorForType();
 
-          for (OneofDescriptor oneOfDescriptor : descriptor.getRealOneofs()) {
+          int numRealOneOfs = descriptor.getRealOneofCount();
+          for (int i = 0; i < numRealOneOfs; i++) {
+            OneofDescriptor oneOfDescriptor = descriptor.getOneof(i);
             if (message.hasOneof(oneOfDescriptor)) {
               FieldDescriptor fieldDescriptor = message.getOneofFieldDescriptor(oneOfDescriptor);
               Object obj = message.getField(fieldDescriptor);
               if (obj != null) {
                 if (flattenUnions) {
-                  setStructField(schema, message, struct, fieldDescriptor);
+                  setStructField(schema, message, struct, fieldDescriptor, null);
                 } else {
                   setUnionField(schema, message, struct, oneOfDescriptor, fieldDescriptor);
                 }
@@ -1244,13 +1246,31 @@ public class ProtobufData {
             }
           }
 
-          for (FieldDescriptor fieldDescriptor : descriptor.getFields()) {
+          
+          List<FieldDescriptor> fields = descriptor.getFields();
+          int numFields = fields.size();
+          // Since the fields and the entry are both sorted, is it most efficient to iterate through both at once.
+          Iterator<Map.Entry<FieldDescriptor, Object>> entryIterator = message.getAllFields().entrySet().iterator();
+          Map.Entry<FieldDescriptor, Object> currentEntry =  null;
+          if (entryIterator.hasNext()) {
+            currentEntry = entryIterator.next();
+          }
+          for (int i = 0; i < numFields; i++) {
+            FieldDescriptor fieldDescriptor = fields.get(i);
+            Object value = null;
+            if (currentEntry != null && currentEntry.getKey().equals(fieldDescriptor)) {
+              // Grab the value and move the entry iterator forward
+              value = currentEntry.getValue();
+              if (entryIterator.hasNext()) {
+                currentEntry = entryIterator.next();
+              }
+            }
             OneofDescriptor oneOfDescriptor = fieldDescriptor.getRealContainingOneof();
             if (oneOfDescriptor != null) {
               // Already added field as oneof
               continue;
             }
-            setStructField(schema, message, struct, fieldDescriptor);
+            setStructField(schema, message, struct, fieldDescriptor, value);
           }
 
           converted = struct;
@@ -1303,14 +1323,17 @@ public class ProtobufData {
       Schema schema,
       Message message,
       Struct result,
-      FieldDescriptor fieldDescriptor
+      FieldDescriptor fieldDescriptor,
+      Object value
   ) {
     final String fieldName = fieldDescriptor.getName();
     final Field field = schema.field(fieldName);
     if ((isPrimitiveOrRepeated(fieldDescriptor) && !isOptional(fieldDescriptor))
-        || (generateStructForNulls || message.hasField(fieldDescriptor))) {
-      Object obj = message.getField(fieldDescriptor);
-      result.put(fieldName, toConnectData(field.schema(), obj));
+        || (generateStructForNulls || value != null)) {
+      if (value == null) {
+        value = message.getField(fieldDescriptor);
+      }
+      result.put(fieldName, toConnectData(field.schema(), value));
     }
   }
 
